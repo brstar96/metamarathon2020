@@ -11,15 +11,15 @@ import segmentation_models_pytorch as smp
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", type=str, default='train', choices=['train', 'infer'])
-parser.add_argument('--backbone', type=str, default='se_resnet50',
+parser.add_argument('--backbone', type=str, default='inceptionv4',
                     choices=['efficientnet-b0, efficientnet-b1, efficientnet_b2, efficientnet_b3, resnet50, resnet101, inceptionv4, mobilenet_v2, se_resnet50, se_resnet101'])
 parser.add_argument("--n_epochs", type=int, default=300, help="number of epochs of training")
-parser.add_argument("--batch_size", type=int, default=16, help="size of the batches")
+parser.add_argument("--batch_size", type=int, default=4, help="size of the batches")
 parser.add_argument("--lr", type=float, default=2.5e-4, help="adam: learning rate") # default : 0.0002
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
-parser.add_argument("--img_size", type=int, default=512, help="size of each image dimension")
+parser.add_argument("--img_size", type=int, default=1024, help="size of each image dimension")
 parser.add_argument("--channels", type=int, default=1, help="number of image channels")
 parser.add_argument("--n_critic", type=int, default=5, help="number of training steps for discriminator per iter")
 parser.add_argument("--clip_value", type=float, default=0.01, help="lower and upper clip value for disc. weights")
@@ -108,12 +108,32 @@ for epoch in range(args.n_epochs):
             g_loss.backward()
             optimizer_G.step()
 
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-                % (epoch, args.n_epochs, i, len(batch_loader), d_loss.item(), g_loss.item())
-            )
+            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]" % (epoch, args.n_epochs, i, len(batch_loader), d_loss.item(), g_loss.item()))
+
+            # ----------------
+            # save_state_path = os.path.join(
+            #     args.model_path + 'animfaceclassifier_ResNet101_173classes_' + str(epoch_idx) + 'Epoch.pkl')
+            #
+            # if not (os.path.isdir(args.model_path)):
+            #     os.makedirs(args.model_path)
+            #     log_batch1 = 'New directory for saving checkpoint : ' + str(args.model_path)
+            #     print(log_batch1)
+            #     log_file.write(str(log_batch1))
+            #     log_file.write('\n')
+            # torch.save({'epoch': epoch_idx + 1,
+            #             'arch': args.arch,
+            #             'model_state_dict': resnet.state_dict(),
+            #             'optimizer_state_dict': optimizer.state_dict(),
+            #             'loss': loss}, save_state_path)
+            # log_batch2 = 'Model saved! \n Epoch {} / {}: Loss {:2.4f} / Epoch Acc {:2.4f}'.format(epoch_idx,
+            #                                                                                       args.epochs,
+            #                                                                                       total_loss / len(
+            #                                                                                           train_loader.dataset),
+            #                                                                                       total_correct / len(
+            #                                                                                           train_loader.dataset))
 
             if batches_done % args.sample_interval == 0:
                 save_image(fake_imgs.data[:25], 'train_result/'+args.backbone+"_images/%d.png" % batches_done, nrow=5, normalize=True)
+
 
             batches_done += args.n_critic

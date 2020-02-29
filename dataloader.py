@@ -1,6 +1,7 @@
 import os
 from PIL import Image
 import torchvision as vision
+from utils.invert import Invert
 
 def custom_transforms(args):
     data_transforms = {
@@ -8,6 +9,7 @@ def custom_transforms(args):
             vision.transforms.Resize((args.img_size, args.img_size)),
             # vision.transforms.RandomHorizontalFlip(),
             # vision.transforms.RandomRotation(10),
+            Invert(),
             vision.transforms.ToTensor(),
             vision.transforms.Normalize(
                 # ImageNet default parameter:
@@ -19,6 +21,7 @@ def custom_transforms(args):
         # 'test'는 reference와 query 이미지에 대해 수행됩니다.
         'test': vision.transforms.Compose([
             vision.transforms.Resize((args.img_size, args.img_size)),
+            Invert(),
             vision.transforms.ToTensor(),
             vision.transforms.Normalize(
                 [0.,],
