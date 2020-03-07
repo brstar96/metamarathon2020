@@ -49,12 +49,13 @@ class Discriminator(nn.Module):
             nn.Conv2d(512, 1, 4, padding=1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
         )
+        self.adv_layer = nn.Sequential(nn.Linear(1024, 1), nn.Sigmoid())
         self.model.to('cuda')
+        self.adv_layer.to('cuda')
         print('Discriminator transfered to CUDA device.')
 
     def forward(self, img):
-        # img_flat = img.view(img.shape[0], -1)
-        # print('shape of img in define_networks.py:', img.shape)
-        validity = self.model(img)
-        # print('shape of validity:', validity.shape)
-        return validity
+        feat = self.model(img)
+        feat = feat.view(feat.shape[0], -1)
+        pred = self.adv_layer(feat)
+        return feat, pred

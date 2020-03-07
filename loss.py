@@ -3,6 +3,11 @@ import torch
 import torch.autograd as autograd
 from torch.autograd import Variable
 
+import numpy as np
+import torch
+import torch.autograd as autograd
+from torch.autograd import Variable
+
 def calculate_gradient_penalty(device, batch_size, discriminator, real_images, fake_images, lambda_gp):
     print(device)
     eta = torch.FloatTensor(batch_size, 1, 1, 1).uniform_(0, 1)
@@ -27,31 +32,31 @@ def calculate_gradient_penalty(device, batch_size, discriminator, real_images, f
     grad_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * lambda_gp
     return grad_penalty
 
-# def compute_gradient_penalty(device, BATCH_SIZE, Tensor, D, real_samples, fake_samples):
-#     """Calculates the gradient penalty loss for WGAN GP"""
-#     # Random weight term for interpolation between real and fake samples
-#     print('shape of real_samples in loss.py:', real_samples.shape)
-#     print('shape of fake_samples in loss.py:', fake_samples.shape)
-#
-#     alpha = Tensor(np.random.random((BATCH_SIZE, 1, 1, 1)))
-#     # alpha = torch.FloatTensor(BATCH_SIZE, 1, 1, 1).uniform_(0, 1)
-#     alpha = alpha.expand(BATCH_SIZE, real_samples.size(1), real_samples.size(2), real_samples.size(3))
-#     alpha.to(device)
-#
-#     print('shape of alpha in loss.py:', alpha.shape)
-#     # Get random interpolation between real and fake samples
-#     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
-#     d_interpolates = D(interpolates)
-#     fake = Variable(Tensor(real_samples.shape[0], 1).fill_(1.0), requires_grad=False)
-#     # Get gradient w.r.t. interpolates
-#     gradients = autograd.grad(
-#         outputs=d_interpolates,
-#         inputs=interpolates,
-#         grad_outputs=fake,
-#         create_graph=True,
-#         retain_graph=True,
-#         only_inputs=True,
-#     )[0]
-#     gradients = gradients.view(gradients.size(0), -1)
-#     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
-#     return gradient_penalty
+def l1_loss(input, target):
+    """ L1 Loss without reduce flag.
+
+    Args:
+        input (FloatTensor): Input tensor
+        target (FloatTensor): Output tensor
+
+    Returns:
+        [FloatTensor]: L1 distance between input and output
+    """
+
+    return torch.mean(torch.abs(input - target))
+
+##
+def l2_loss(input, target, size_average=True):
+    """ L2 Loss without reduce flag.
+
+    Args:
+        input (FloatTensor): Input tensor
+        target (FloatTensor): Output tensor
+
+    Returns:
+        [FloatTensor]: L2 distance between input and output
+    """
+    if size_average:
+        return torch.mean(torch.pow((input-target), 2))
+    else:
+        return torch.pow((input-target), 2)

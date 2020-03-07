@@ -4,6 +4,8 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 
+import loss
+import torch.nn as nn
 from define_networks import Generator, Discriminator
 from dataloader import metamatathonDataset, custom_transforms
 from loss import calculate_gradient_penalty
@@ -29,8 +31,12 @@ parser.add_argument("--DATASET_PATH", type=str, default='./data/wetransfer-a25d9
 args = parser.parse_args()
 print(args)
 
-os.makedirs('train_result/'+args.backbone+"_images", exist_ok=True)
-img_shape = (args.channels, args.img_size, args.img_size)
+model_save_path = 'E:/metamarathon_train_result/'+args.backbone + '_imgsize' + str(args.img_size) +"_models"
+train_resimg_save_path = 'results/train_result/' + args.backbone + '_imgsize' + str(args.img_size) + "_images"
+test_resimg_save_path = 'results/test_result/' + args.backbone + '_imgsize' + str(args.img_size) + "_images"
+os.makedirs(train_resimg_save_path, exist_ok=True)
+os.makedirs(model_save_path, exist_ok=True)
+
 warnings.filterwarnings('ignore')
 writer = SummaryWriter()
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -40,6 +46,10 @@ cuda = True if torch.cuda.is_available() else False
 
 # Loss weight for gradient penalty
 lambda_gp = 10
+# Define Loss functions
+loss_adversarial = nn.BCELoss()
+loss_contextual = nn.L1Loss()
+loss_latent = loss.l2_loss
 
 # Initialize generator and discriminator
 generator = smp.Unet(encoder_name=args.backbone, encoder_weights='imagenet', in_channels=1, classes=1)
@@ -67,73 +77,79 @@ Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 batches_done = 0
 for epoch in range(args.n_epochs):
     for i, img in enumerate(batch_loader):
-        img = img.to('cuda')
-
-        # Configure input
-        real_imgs = Variable(img.type(Tensor))
-
+        # ---------------------
         #  Train Discriminator
+        # ---------------------
+        real_img = img.to('cuda')
         optimizer_D.zero_grad()
 
         # Generate a batch of images
-        fake_imgs = generator(img)
-
-        # Real images
-        real_validity = discriminator(real_imgs)
-        # Fake images
-        fake_validity = discriminator(fake_imgs)
+        fake_img = generator(real_img)
+        fake_feature, fake_pred = discriminator(fake_img)
+        real_feature, real_pred = discriminator(real_img)
+        real_label = torch.ones(size=(args.batch_size, 1), dtype=torch.float32, device=device)
+        fake_label = torch.zeros(size=(args.batch_size, 1), dtype=torch.float32, device=device)
 
         # Gradient penalty
-        # TODO: Gradient penalty debugging
+        # gradient_penalty = compute_gradient_penalty(Tensor, discriminator, real_imgs.data, fake_imgs.data)
         # gradient_penalty = calculate_gradient_penalty(device, args.batch_size, discriminator, real_imgs.data, fake_imgs.data, lambda_gp)
 
         # Adversarial loss
-        # d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + lambda_gp * gradient_penalty
-        d_loss = -torch.mean(real_validity) + torch.mean(fake_validity)
+        # print(fake_pred.shape)
+        # print(fake_label.shape)
+        err_d_fake = loss_adversarial(fake_pred, fake_label)  # Fake adversarial loss
+        err_d_real = loss_adversarial(real_pred, real_label)
+        err_g_latent = loss_latent(fake_feature, real_feature)
+        err_d = err_d_real + err_d_fake + err_g_latent
+        # d_loss = -torch.mean(real_feature) + torch.mean(fake_feature) + lambda_gp * gradient_penalty
 
-        d_loss.backward()
+        err_d.backward(retain_graph=True)
         optimizer_D.step()
 
         optimizer_G.zero_grad()
 
-        # Train Generator(Train the generator every n_critic steps)
+        # Train the generator every n_critic steps
         if i % args.n_critic == 0:
-            # Generate a batch of images
-            fake_imgs = generator(img)
+            # -----------------
+            #  Train Generator
+            # -----------------
 
-            # Train on fake images
-            fake_validity = discriminator(fake_imgs)
-            g_loss = -torch.mean(fake_validity)
+            _fake_img = generator(real_img)
 
-            g_loss.backward()
+            err_g_adversarial = args.w_adv * loss_adversarial(fake_pred,
+                                                              real_label)  # fake img와 정답 이미지 간의 adversarial loss (진짜/가짜)
+            err_g_context = args.w_con * loss_contextual(_fake_img, real_img)  # 원본 이미지와 recons img의 contexture loss
+            err_g_latent = args.w_lat * loss_latent(fake_feature,
+                                                    real_feature)  # fake img의 latent vector와 원본 이미지의 latent vector간 l2 loss
+            g_loss = err_g_adversarial + err_g_context + err_g_latent
+
+            g_loss.backward(retain_graph=True)
             optimizer_G.step()
 
-            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]" % (epoch, args.n_epochs, i, len(batch_loader), d_loss.item(), g_loss.item()))
-
-            # ----------------
-            # save_state_path = os.path.join(
-            #     args.model_path + 'animfaceclassifier_ResNet101_173classes_' + str(epoch_idx) + 'Epoch.pkl')
-            #
-            # if not (os.path.isdir(args.model_path)):
-            #     os.makedirs(args.model_path)
-            #     log_batch1 = 'New directory for saving checkpoint : ' + str(args.model_path)
-            #     print(log_batch1)
-            #     log_file.write(str(log_batch1))
-            #     log_file.write('\n')
-            # torch.save({'epoch': epoch_idx + 1,
-            #             'arch': args.arch,
-            #             'model_state_dict': resnet.state_dict(),
-            #             'optimizer_state_dict': optimizer.state_dict(),
-            #             'loss': loss}, save_state_path)
-            # log_batch2 = 'Model saved! \n Epoch {} / {}: Loss {:2.4f} / Epoch Acc {:2.4f}'.format(epoch_idx,
-            #                                                                                       args.epochs,
-            #                                                                                       total_loss / len(
-            #                                                                                           train_loader.dataset),
-            #                                                                                       total_correct / len(
-            #                                                                                           train_loader.dataset))
+            print(
+                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+                % (epoch, args.n_epochs, i, len(batch_loader), err_d.item(), g_loss.item())
+            )
 
             if batches_done % args.sample_interval == 0:
-                save_image(fake_imgs.data[:25], 'train_result/'+args.backbone+"_images/%d.png" % batches_done, nrow=5, normalize=True)
+                state = {
+                    'epoch': epoch,
+                    'state_dict': generator.state_dict(),
+                    'optimizer': optimizer_G.state_dict(),
+                }
+                save_image(fake_img.data[:25], train_resimg_save_path + '/%d.png' % batches_done, nrow=5,
+                           normalize=True)
+                # TODO: add model save code
+                torch.save(state, model_save_path + '/' + args.backbone + '_%d.pth' % batches_done)
 
+                # 로딩시엔 아래와 같이 사용
+                # model.load_state_dict(state['state_dict'])
+                # optimizer.load_state_dict(state['optimizer'])
+
+            batches_done += args.n_critic
+
+            if batches_done % args.sample_interval == 0:
+                save_image(fake_img.data[:25], 'train_result/'+args.backbone+"_images/%d.png" % batches_done, nrow=5, normalize=True)
+                torch.save(state, model_save_path + '/' + args.backbone + '_%d.pth' % batches_done)
 
             batches_done += args.n_critic
