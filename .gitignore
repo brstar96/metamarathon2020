@@ -10,7 +10,7 @@ __pycache__/
 .Python
 .idea
 .xml
-*.png
+train_result/
 runs/
 build/
 develop-eggs/
